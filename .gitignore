@@ -96,3 +96,5 @@ dmypy.json
 *.log
 *.tmp
 *.temp
+
+requirements.venv.txt
