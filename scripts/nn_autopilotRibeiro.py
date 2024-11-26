@@ -2,18 +2,27 @@ import sys
 import torch
 import torch.nn as nn
 from PyQt6 import QtWidgets
-from models import CNN, CNNColor, ConcatModel
 import cv2
+import numpy as np
+from torchvision import transforms
 from data_collector import DataCollectionUI
+from models import SimpleImageColorNet
+import matplotlib.pyplot as plt
 import time
 import numpy as np
 
-# Load the ConcatModel
+# Initialize device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model_path = "model.pth"
 
-print("Device:", device)
-print("Loading model...")
+# Path to the pre-trained model
+model_path = "model.pth"
+color_to_follow=[255,0,0]
+
+# Load model
+model = SimpleImageColorNet()
+try:
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict, strict=False)
 
 try:
     cnn_model = CNN(num_classes=4)
@@ -25,9 +34,10 @@ except Exception as e:
     print(f"Error loading model: {e}")
     sys.exit(1)
 
-# Define the color to follow
-color_to_follow = [255, 0, 0]
-print(f"Color to follow: {color_to_follow}")
+# Preprocessing pipeline
+preprocess = transforms.Compose([
+    transforms.ToTensor(),  # Convert image to tensor
+])
 
 # Command labels corresponding to model output indices
 output_feature_labels = ['forward', 'backward', 'right', 'left']
@@ -51,11 +61,13 @@ def preprocess_color(color_rgb):
 
     return color.to(device)
 
-class ConcatModelMsgProcessor:
+    return image_tensor.unsqueeze(0).to(device), color_tensor.to(device)
+
+
+class CNNMsgProcessor:
     def __init__(self):
         self.model = model
-        self.last_command = None
-        self.last_command_time = 0
+        self.last_message = None  # To store the previous valid message
 
     def nn_infer(self, message):
         print("Running inference...")
@@ -109,24 +121,42 @@ class ConcatModelMsgProcessor:
                 self.last_command_time = current_time
                 data_collector.onCarControlled(command, start)
             else:
-                # Continuously send "push" if confidence remains high
-                data_collector.onCarControlled(command, True)
+                predicted_action = 'none'
+
+
+            print(f"Predicted action: {predicted_action}")
+            return [(predicted_action, True)]
+
+        except Exception as e:
+            print(f"Error during inference: {e}")
+            return []
+
+    def handle_message(self, message, data_collector):
+        try:
+            print("Handling message...")
+
+            # Infer commands from the CNN model
+            commands = self.cnn_infer(message)
+
+            # Update last_message after successful processing
+            self.last_message = message if message.image is not None else self.last_message
+
+            # Send commands to the data collector
+            for command, start in commands:
+                data_collector.onCarControlled(command, start)
+
+        except Exception as e:
+            print(f"Error while handling message: {e}")
+
 
 if __name__ == "__main__":
     def except_hook(cls, exception, traceback):
         sys.__excepthook__(cls, exception, traceback)
+
     sys.excepthook = except_hook
 
-    print("Starting application...")
-
     app = QtWidgets.QApplication(sys.argv)
-
-    print("Initializing neural network message processor...")
-    nn_brain = ConcatModelMsgProcessor()
-
-    print("Setting up data collection UI...")
-    data_window = DataCollectionUI(nn_brain.process_message)  # Pass the process_message as the callback
+    cnn_brain = CNNMsgProcessor()
+    data_window = DataCollectionUI(cnn_brain.handle_message)
     data_window.show()
-
-    print("Running application...")
     app.exec()
