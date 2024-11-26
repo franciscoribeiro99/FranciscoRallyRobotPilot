@@ -2,6 +2,10 @@ import sys
 import torch
 import torch.nn as nn
 from PyQt6 import QtWidgets
+<<<<<<< HEAD
+=======
+
+>>>>>>> b1a279b (Starting to infere need better information)
 from data_collector import DataCollectionUI
 """
 This file is provided as an example of what a simplistic controller could be done.
@@ -53,6 +57,11 @@ model.eval()
 
 output_feature_labels = ['forward', 'back', 'left', 'right', 'nothing']
 
+<<<<<<< HEAD
+=======
+
+
+>>>>>>> b1a279b (Starting to infere need better information)
 class SimpleNNMsgProcessor:
     def __init__(self):
         self.model = model
@@ -70,16 +79,26 @@ class SimpleNNMsgProcessor:
         # For example, if the model outputs probabilities for different actions:
         _, predicted = torch.max(output, 1)
         predicted = predicted.item()
+<<<<<<< HEAD
 
         print(output_feature_labels[predicted])
 
+=======
+        
+        print(output_feature_labels[predicted])
+
+>>>>>>> b1a279b (Starting to infere need better information)
         # Treat nothing as no action.
         if predicted == 4:
             return
             # return [(output_feature_labels[0], True)]
         else:
             return [(output_feature_labels[predicted], True)]
+<<<<<<< HEAD
 
+=======
+        
+>>>>>>> b1a279b (Starting to infere need better information)
 
     def process_message(self, message, data_collector):
 

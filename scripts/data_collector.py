@@ -151,7 +151,6 @@ if __name__ == "__main__":
     import sys
     from nn_autopilotRibeiro2 import CNNMsgProcessor as ModelMessageProcessor
     #from nn_autopilotRibeiro import Autopilot as AutopilotRibeiro
-
     def except_hook(cls, exception, traceback):
         sys.__excepthook__(cls, exception, traceback)
     sys.excepthook = except_hook
@@ -159,11 +158,9 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
 
     # Initialize the model processor and set it as the callback
-    #nn_brain =AutopilotRibeiro()
-    nn_brain = ModelMessageProcessor()
+    nn_brain = ConcatModelMsgProcessor()
+    data_window = DataCollectionUI(nn_brain.process_message)
 
-    #data_window = DataCollectionUI(nn_brain.process_message)
-    data_window = DataCollectionUI(nn_brain.handle_message)
     data_window.show()
 
     app.exec()

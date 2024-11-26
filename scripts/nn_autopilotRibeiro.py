@@ -48,6 +48,7 @@ def preprocess_color(color_rgb):
     print("Preprocessing color...")
     color_rgb = [c / 255.0 for c in color_rgb]  # Normalize RGB values
     color = torch.tensor(color_rgb, dtype=torch.float32).unsqueeze(0)
+
     return color.to(device)
 
 class ConcatModelMsgProcessor:
@@ -68,7 +69,7 @@ class ConcatModelMsgProcessor:
         with torch.no_grad():
             outputs = self.model(image_input, color_input)
             probabilities = torch.sigmoid(outputs).cpu().numpy().flatten()
-        
+
         print(f"Model output probabilities: {probabilities}")
 
         # Adjust confidence threshold dynamically (e.g., based on average)

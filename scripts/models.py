@@ -28,7 +28,7 @@ class CNNColor(nn.Module):
     def __init__(self, num_classes):
         super(CNNColor, self).__init__()
         self.fc = nn.Linear(3, num_classes)  # Input is RGB (3 channels)
-        
+
     def forward(self, x):
         return self.fc(x)
 
@@ -40,7 +40,7 @@ class ConcatModel(nn.Module):
         self.cnn_color = cnn_color
         # Combine the output features of both networks
         self.fc = nn.Linear(cnn.fc.out_features + cnn_color.fc.out_features, 4)  # 4 output classes (commands)
-        
+
     def forward(self, x, y):
         x = self.cnn(x)  # Image features from pretrained CNN
         y = self.cnn_color(y)  # Color features
