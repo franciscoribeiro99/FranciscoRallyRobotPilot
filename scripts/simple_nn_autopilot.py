@@ -2,14 +2,13 @@ import sys
 import torch
 import torch.nn as nn
 from PyQt6 import QtWidgets
-
 from data_collector import DataCollectionUI
 """
 This file is provided as an example of what a simplistic controller could be done.
 It simply uses the DataCollectionUI interface zo receive sensing_messages and send controls.
 
 /!\ Be warned that if the processing time of NNMsgProcessor.process_message is superior to the message reception period, a lag between the images processed and commands sent.
-One might want to only process the last sensing_message received, etc. 
+One might want to only process the last sensing_message received, etc.
 Be warned that this could also cause crash on the client side if socket sending buffer overflows
 
 /!\ Do not work directly in this file (make a copy and rename it) to prevent future pull from erasing what you write here.
@@ -54,8 +53,6 @@ model.eval()
 
 output_feature_labels = ['forward', 'back', 'left', 'right', 'nothing']
 
-
-
 class SimpleNNMsgProcessor:
     def __init__(self):
         self.model = model
@@ -73,7 +70,7 @@ class SimpleNNMsgProcessor:
         # For example, if the model outputs probabilities for different actions:
         _, predicted = torch.max(output, 1)
         predicted = predicted.item()
-        
+
         print(output_feature_labels[predicted])
 
         # Treat nothing as no action.
@@ -82,7 +79,7 @@ class SimpleNNMsgProcessor:
             # return [(output_feature_labels[0], True)]
         else:
             return [(output_feature_labels[predicted], True)]
-        
+
 
     def process_message(self, message, data_collector):
 

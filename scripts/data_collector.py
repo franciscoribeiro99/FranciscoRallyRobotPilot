@@ -12,10 +12,7 @@ import lzma
 class DataCollectionUI(QtWidgets.QMainWindow):
     def __init__(self, message_processing_callback = None):
         super().__init__()
-        
-        
         uic.loadUi("scripts/DataCollector.ui", self)
-
 
         buttons = [self.forwardButton, self.backwardButton, self.rightButton, self.leftButton]
         self.command_directions = { "w":"forward", "s":"back", "d":"right", "a":"left" }
@@ -164,10 +161,9 @@ if __name__ == "__main__":
     # Initialize the model processor and set it as the callback
     #nn_brain =AutopilotRibeiro()
     nn_brain = ModelMessageProcessor()
-    
+
     #data_window = DataCollectionUI(nn_brain.process_message)
     data_window = DataCollectionUI(nn_brain.handle_message)
-
     data_window.show()
 
     app.exec()

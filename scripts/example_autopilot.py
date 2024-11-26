@@ -8,7 +8,7 @@ This file is provided as an example of what a simplistic controller could be don
 It simply uses the DataCollectionUI interface zo receive sensing_messages and send controls.
 
 /!\ Be warned that if the processing time of NNMsgProcessor.process_message is superior to the message reception period, a lag between the images processed and commands sent.
-One might want to only process the last sensing_message received, etc. 
+One might want to only process the last sensing_message received, etc.
 Be warned that this could also cause crash on the client side if socket sending buffer overflows
 
 /!\ Do not work directly in this file (make a copy and rename it) to prevent future pull from erasing what you write here.
@@ -20,8 +20,6 @@ class ExampleNNMsgProcessor:
         self.always_forward = True
 
     def nn_infer(self, message):
-
-
         return [("forward", True)]
 
     def process_message(self, message, data_collector):
