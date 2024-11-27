@@ -9,6 +9,7 @@ from data_collector import DataCollectionUI
 from models2 import SimpleImageColorNet
 import matplotlib.pyplot as plt
 import time
+import torch.nn.functional as F
 
 import lzma, pickle
 from math import sqrt
@@ -18,6 +19,7 @@ from functools import reduce
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Path to the pre-trained model
+IMAGE_SIZE = (227, 227)
 model_path = "model.pth"
 color_to_follow=[255,0,0]
 
@@ -45,7 +47,6 @@ preprocess = transforms.Compose([
     transforms.ToTensor(),  # Convert image to tensor
 ])
 
-
 def preprocess_input(image, color):
     """Resize, normalize, and prepare the image and color input."""
     if image.shape[-1] != 6:
@@ -60,32 +61,24 @@ def compute_metrics(record_filename):
         sensing_messages = pickle.load(f)
 
     finite_differences = lambda p1, p2: sqrt((p2[0] - p1[0])**2 + (p2[2] - p1[2])**2)
-    finite_differences_3 = lambda p1, p2, p3: (
-        sqrt(
-            ((p3[0] - p2[0]) - (p2[0] - p1[0]))**2
-            + ((p3[2] - p2[2]) - (p2[2] - p1[2]))**2
-        )
-    )
 
     # compute cumulative distance
     car_positions = [s.car_position for s in sensing_messages]
+    cumulative_distance = reduce(lambda res, ps: res + finite_differences(ps[0], ps[1]), zip(car_positions[:-1], car_positions[1:]), 0.0)
 
     car_distances = [finite_differences(p1, p2) for p1, p2 in zip(car_positions[:-1], car_positions[1:])]
-    mean_speed = sum(car_distances) / len(car_distances)
+    mean_speed = reduce(lambda res, ss: res + finite_differences(ss[0], ss[1]) / (len(car_distances) - 1), zip(car_distances[:-1], car_distances[1:]), 0.0)
 
-    car_accelerations = [finite_differences_3(p1, p2, p3) for p1, p2, p3 in zip(car_positions[:-2], car_positions[1:-1], car_positions[2:])]
-    mean_acceleration = sum(car_accelerations) / len(car_accelerations)
-
-    # collisions
-
-    print(f"Measurements for file {record_filename}:")
-    print(f"Mean speed:\t{mean_speed:.3} [units/frame]")
-    print(f"Mean acceleration:\t{mean_acceleration:.3} [units/frame²]")
+    print(f"Total distance: {cumulative_distance} [units]")
+    print(f"Mean speed: {mean_speed} [units/frame]")
 
 class CNNMsgProcessor:
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self.model = model
         self.last_message = None
+        self.simulation_time = int(args[0][1]) # in seconds
+        self.start_time = None
+        self.is_simulation_finished = False
 
     def cnn_infer(self, message):
         if message.image is None:
@@ -112,24 +105,34 @@ class CNNMsgProcessor:
             print(f"Inference error: {e}")
             return []
 
-
     def handle_message(self, message, data_collector):
-        try:
-            print("Handling message...")
+        if self.start_time is None:
+            # autopilot is turned on,
+            # start measuring time
+            self.start_time = time.time()
+        else:
+            # check if timeout shall
+            # be issued (in seconds)
+            execution_time = time.time() - self.start_time
+            if execution_time >= self.simulation_time:
+                print("Saving data..")
+                if data_collector.saving_worker is None:
+                    data_collector.saveRecord()
 
-            # Infer commands from the CNN model
-            commands = self.cnn_infer(message)
+                    data_collector.recording = False
+                    data_collector.message_processing_callback = lambda x, y: None
+            else:
+                try:
+                    # Infer commands from the CNN model
+                    commands = self.cnn_infer(message)
+                    # Update last_message after successful processing
+                    self.last_message = message if message.image is not None else self.last_message
+                    # Send commands to the data collector
+                    for command, start in commands:
+                        data_collector.onCarControlled(command, start)
 
-            # Update last_message after successful processing
-            self.last_message = message if message.image is not None else self.last_message
-
-            # Send commands to the data collector
-            for command, start in commands:
-                data_collector.onCarControlled(command, start)
-
-        except Exception as e:
-            print(f"Error while handling message: {e}")
-
+                except Exception as e:
+                    print(f"Error while handling message: {e}")
 
 if __name__ == "__main__":
     def except_hook(cls, exception, traceback):
@@ -138,7 +141,7 @@ if __name__ == "__main__":
     sys.excepthook = except_hook
 
     app = QtWidgets.QApplication(sys.argv)
-    cnn_brain = CNNMsgProcessor()
-    data_window = DataCollectionUI(cnn_brain.handle_message)
+    cnn_brain = CNNMsgProcessor(sys.argv)
+    data_window = DataCollectionUI(cnn_brain.handle_message, record=True, onDataSaved=compute_metrics)
     data_window.show()
     app.exec()
