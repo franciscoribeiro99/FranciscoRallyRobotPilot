@@ -78,9 +78,16 @@ def compute_metrics(record_filename):
     car_accelerations = [finite_differences_3(p1, p2, p3) for p1, p2, p3 in zip(car_positions[:-2], car_positions[1:-1], car_positions[2:])]
     mean_acceleration = sum(car_accelerations) / len(car_accelerations)
 
+    # compute mean distance of
+    # outer raycasts
+    outer_raycasts_indexes = [0, 1, 2, 12, 13, 14]
+    car_outer_raycasts = [sum([s.raycast_distances[index] for s in sensing_messages]) / len(sensing_messages) for index in outer_raycasts_indexes]
+    mean_outer_raycasts_distance = sum(car_outer_raycasts) / len(outer_raycasts_indexes)
+
     print("Metrics computed on CNN-infered car controls:")
-    print(f"Mean speed:\t{mean_speed} [units/frame]")
-    print(f"Mean acceleration:\t{mean_acceleration} [units/frame²]")
+    print(f"Mean speed:\t{mean_speed:.3} [units/frame]")
+    print(f"Mean acceleration:\t{mean_acceleration:.3} [units/frame²]")
+    print(f"Mean outer raycasts distance:\t{mean_outer_raycasts_distance:.3} [units]")
 
 
 class CNNMsgProcessor:

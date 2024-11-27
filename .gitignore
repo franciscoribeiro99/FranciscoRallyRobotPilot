@@ -99,3 +99,5 @@ dmypy.json
 
 requirements.txt.old
 model.pth
+
+record_*.npz
