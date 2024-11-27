@@ -10,8 +10,9 @@ import pickle
 import lzma
 
 class DataCollectionUI(QtWidgets.QMainWindow):
-    def __init__(self, message_processing_callback = None):
+    def __init__(self, message_processing_callback = None, record = False, onDataSaved = None):
         super().__init__()
+
         uic.loadUi("scripts/DataCollector.ui", self)
 
         buttons = [self.forwardButton, self.backwardButton, self.rightButton, self.leftButton]
@@ -29,7 +30,7 @@ class DataCollectionUI(QtWidgets.QMainWindow):
         self.leftButton.pressed.connect(lambda : self.onCarControlled("left", True))
         self.leftButton.released.connect(lambda : self.onCarControlled("left", False))
 
-        self.recordDataButton.clicked.connect(self.toggleRecord)
+        # self.recordDataButton.clicked.connect(self.toggleRecord)
         self.resetButton.clicked.connect(self.resetNForget)
 
         self.autopiloting = False
@@ -40,7 +41,7 @@ class DataCollectionUI(QtWidgets.QMainWindow):
         self.AutopilotButton.clicked.connect(toggle_autopilot)
         self.message_processing_callback = message_processing_callback
 
-        self.saveRecordButton.clicked.connect(self.saveRecord)
+        # self.saveRecordButton.clicked.connect(self.saveRecord)
 
         self.network_interface = NetworkDataCmdInterface(self.collectMsg)
 
@@ -50,18 +51,18 @@ class DataCollectionUI(QtWidgets.QMainWindow):
 
         self.saving_worker = None
 
-        self.recording = False
+        self.recording = record
 
         self.recorded_data = []
-    def collectMsg(self, msg):
-        if self.recording:
-            if not self.saveImgCheckBox.isChecked():
-                msg.image = None
 
+        self.onDataSaved = onDataSaved
+        toggle_autopilot()
+
+    def collectMsg(self, msg):
+        if self.autopiloting:
             self.recorded_data.append(msg)
             self.nbrSnapshotSaved.setText(str(len(self.recorded_data)))
 
-        if self.autopiloting:
             if self.message_processing_callback is not None:
                 self.message_processing_callback(msg, self)
 
@@ -84,6 +85,7 @@ class DataCollectionUI(QtWidgets.QMainWindow):
     def toggleRecord(self):
         self.recording = not self.recording
         self.recordDataButton.setText("Recording..." if self.recording else "Record")
+
     def onCarControlled(self, direction, start):
         command_types = ["release", "push"]
         print(f"Attempting to send command: {command_types[start]} {direction}")
@@ -125,6 +127,8 @@ class DataCollectionUI(QtWidgets.QMainWindow):
         while os.path.exists(record_name % fid):
             fid += 1
 
+        self.record_name = record_name % fid
+
         class ThreadedSaver(QtCore.QThread):
             def __init__(self, path, data):
                 super().__init__()
@@ -143,14 +147,16 @@ class DataCollectionUI(QtWidgets.QMainWindow):
 
     def onRecordSaveDone(self):
         print("[+] Recorded data saved to", self.saving_worker.path)
-        self.saving_worker = None
         self.saveRecordButton.setText("Save")
+
+        self.onDataSaved(self.record_name)
+
 
 if __name__ == "__main__":
 
     import sys
     from nn_autopilotRibeiro2 import CNNMsgProcessor as ModelMessageProcessor
-    #from nn_autopilotRibeiro import Autopilot as AutopilotRibeiro
+
     def except_hook(cls, exception, traceback):
         sys.__excepthook__(cls, exception, traceback)
     sys.excepthook = except_hook
@@ -158,8 +164,9 @@ if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
 
     # Initialize the model processor and set it as the callback
-    nn_brain = ConcatModelMsgProcessor()
-    data_window = DataCollectionUI(nn_brain.process_message)
+    nn_brain = ModelMessageProcessor()
+
+    data_window = DataCollectionUI(nn_brain.handle_message)
 
     data_window.show()
 
