@@ -61,16 +61,27 @@ def compute_metrics(record_filename):
         sensing_messages = pickle.load(f)
 
     finite_differences = lambda p1, p2: sqrt((p2[0] - p1[0])**2 + (p2[2] - p1[2])**2)
+    finite_differences_3 = lambda p1, p2, p3: (
+        sqrt(
+            ((p3[0] - p2[0]) - (p2[0] - p1[0]))**2 +
+            ((p3[2] - p2[2]) - (p2[2] - p1[2]))**2
+        )
+    )
 
-    # compute cumulative distance
     car_positions = [s.car_position for s in sensing_messages]
-    cumulative_distance = reduce(lambda res, ps: res + finite_differences(ps[0], ps[1]), zip(car_positions[:-1], car_positions[1:]), 0.0)
 
-    car_distances = [finite_differences(p1, p2) for p1, p2 in zip(car_positions[:-1], car_positions[1:])]
-    mean_speed = reduce(lambda res, ss: res + finite_differences(ss[0], ss[1]) / (len(car_distances) - 1), zip(car_distances[:-1], car_distances[1:]), 0.0)
+    # compute mean speed
+    car_speeds = [finite_differences(p1, p2) for p1, p2 in zip(car_positions[:-1], car_positions[1:])]
+    mean_speed = sum(car_speeds) / len(car_speeds)
 
-    print(f"Total distance: {cumulative_distance} [units]")
-    print(f"Mean speed: {mean_speed} [units/frame]")
+    # compute mean acceleration
+    car_accelerations = [finite_differences_3(p1, p2, p3) for p1, p2, p3 in zip(car_positions[:-2], car_positions[1:-1], car_positions[2:])]
+    mean_acceleration = sum(car_accelerations) / len(car_accelerations)
+
+    print("Metrics computed on CNN-infered car controls:")
+    print(f"Mean speed:\t{mean_speed} [units/frame]")
+    print(f"Mean acceleration:\t{mean_acceleration} [units/frame²]")
+
 
 class CNNMsgProcessor:
     def __init__(self, *args, **kwargs):
