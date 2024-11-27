@@ -5,10 +5,14 @@ from PyQt6 import QtWidgets
 import cv2
 import numpy as np
 from torchvision import transforms
-from data_collector import DataCollectionUI  
-from models2 import SimpleImageColorNet 
+from data_collector import DataCollectionUI
+from models2 import SimpleImageColorNet
 import matplotlib.pyplot as plt
 import time
+
+import lzma, pickle
+from math import sqrt
+from functools import reduce
 
 # Initialize device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -50,6 +54,33 @@ def preprocess_input(image, color):
     color_tensor = torch.tensor(color, dtype=torch.float32).unsqueeze(0)
     return image_tensor.unsqueeze(0).to(device), color_tensor.to(device)
 
+def compute_metrics(record_filename):
+    # load record file
+    with lzma.open(record_filename, "r") as f:
+        sensing_messages = pickle.load(f)
+
+    finite_differences = lambda p1, p2: sqrt((p2[0] - p1[0])**2 + (p2[2] - p1[2])**2)
+    finite_differences_3 = lambda p1, p2, p3: (
+        sqrt(
+            ((p3[0] - p2[0]) - (p2[0] - p1[0]))**2
+            + ((p3[2] - p2[2]) - (p2[2] - p1[2]))**2
+        )
+    )
+
+    # compute cumulative distance
+    car_positions = [s.car_position for s in sensing_messages]
+
+    car_distances = [finite_differences(p1, p2) for p1, p2 in zip(car_positions[:-1], car_positions[1:])]
+    mean_speed = sum(car_distances) / len(car_distances)
+
+    car_accelerations = [finite_differences_3(p1, p2, p3) for p1, p2, p3 in zip(car_positions[:-2], car_positions[1:-1], car_positions[2:])]
+    mean_acceleration = sum(car_accelerations) / len(car_accelerations)
+
+    # collisions
+
+    print(f"Measurements for file {record_filename}:")
+    print(f"Mean speed:\t{mean_speed:.3} [units/frame]")
+    print(f"Mean acceleration:\t{mean_acceleration:.3} [units/frame²]")
 
 class CNNMsgProcessor:
     def __init__(self):
@@ -71,11 +102,11 @@ class CNNMsgProcessor:
                 output = self.model(concatenated_tensor, color_tensor)
                 probabilities = F.softmax(output, dim=1)
                 predicted_action = torch.argmax(probabilities, dim=1).item()
-            
+
             # print the probabilities
             print(probabilities)
             print(f"Predicted action: {output_feature_labels[predicted_action]}")
-            
+
             return [(output_feature_labels[predicted_action], True)]
         except Exception as e:
             print(f"Inference error: {e}")
