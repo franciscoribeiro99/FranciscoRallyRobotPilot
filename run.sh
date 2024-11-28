@@ -11,7 +11,6 @@
 echo STARTING AT `date`
 
 #run the code and output the console print on output.txt file
-python3 train.py
-
+python3 training.py
 
 echo FINISHED at `date`

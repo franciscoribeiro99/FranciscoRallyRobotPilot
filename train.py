@@ -7,90 +7,98 @@ import numpy as np
 import torch
 from torchvision import transforms
 import torch.nn.functional as F
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torch import nn
 from torch.optim import Adam
-from scripts.models2 import SimpleImageColorNet
-from sklearn.model_selection import train_test_split
+from scripts.models2 import *
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from collections import Counter
 
 # Constants
-IMAGE_SIZE = (227, 227)
-COLORS = [[255, 0, 0], [0, 0, 255], [0, 255, 255], [0, 255, 0], [255, 255, 0], 
-          [255, 0, 255], [0, 0, 0], [255, 255, 255], [128, 128, 128], [120, 120, 120], [255, 0, 0]]
+COLOR = [[255, 0, 0], [0, 0, 255], [0, 255, 255]]
+IMAGE_SIZE = (224, 224)
 
+# Class to hold image and color data
 class SnapshotToTrain:
     def __init__(self, image, color_followed, current_controls):
         self.image = image
         self.color_followed = color_followed
         self.current_controls = current_controls
 
-def preprocess_image_pair(image1, image2):
-    """Resize, concatenate, and normalize snapshot pair."""
-    resized_image1 = cv2.resize(image1, IMAGE_SIZE)
-    resized_image2 = cv2.resize(image2, IMAGE_SIZE)
-    concatenated_image = np.concatenate((resized_image1, resized_image2), axis=2)  # 6 channels
-    concatenated_image = concatenated_image.transpose(2, 0, 1) / 255.0  # Normalize and reorder to (C, H, W)
-    return torch.tensor(concatenated_image, dtype=torch.float32)
+# Function to process snapshot pairs
+def process_snapshot_pair(snapshot1, snapshot2):
+    if snapshot1.image is not None and snapshot2.image is not None:
+        resized_image1 = cv2.resize(snapshot1.image, IMAGE_SIZE)
+        resized_image2 = cv2.resize(snapshot2.image, IMAGE_SIZE)
+        resized_image1 = cv2.cvtColor(resized_image1, cv2.COLOR_BGR2RGB)
+        resized_image2 = cv2.cvtColor(resized_image2, cv2.COLOR_BGR2RGB)
+        concatenated_image = np.concatenate((resized_image1, resized_image2), axis=2)
+        return concatenated_image, snapshot2.current_controls
+    else:
+        print("Warning: Missing image in one or both snapshots")
 
-# Load snapshots
+# Read and preprocess data
 snapshots = []
 for record in glob.glob("*.npz"):
     try:
         with lzma.open(record, "rb") as file:
             data = pickle.load(file)
+            print(f"Read {len(data)} snapshots from {record}")
             npz_number = int(record.split("_")[1].split(".")[0])
-            color_followed = COLORS[npz_number]
-
+            color_followed = COLOR[npz_number]
             for i in range(len(data) - 1):
-                image = preprocess_image_pair(data[i].image, data[i + 1].image)
-                controls = data[i + 1].current_controls
+                image, controls = process_snapshot_pair(data[i], data[i + 1])
                 snapshots.append(SnapshotToTrain(image, color_followed, controls))
+    except EOFError:
+        print("Error: Compressed file ended before the end-of-stream marker was reached.")
     except Exception as e:
-        print(f"Error loading {record}: {e}")
-
-print(f"Loaded {len(snapshots)} snapshot pairs.")
+        print(f"An error occurred: {e}")
+print(f"Total concatenated snapshots read: {len(snapshots)}")
 
 # Data augmentation
 def augment_data(snapshots):
-    augmented = []
+    snapshots_augmented = []
     for snap in snapshots:
-        augmented.append(snap)  # Original
-        flipped_img = snap.image.flip(dims=[2])  # Horizontal flip
-        flipped_ctrl = (snap.current_controls[0], snap.current_controls[1], 
-                        snap.current_controls[3], snap.current_controls[2])  # Swap left-right
-        augmented.append(SnapshotToTrain(flipped_img, snap.color_followed, flipped_ctrl))
-    return augmented
+        snapshots_augmented.append(snap)
+        flipped_img = snap.image[:, ::-1, :]
+        flipped_ctrl = (snap.current_controls[0], snap.current_controls[1], snap.current_controls[3], snap.current_controls[2])
+        snapshots_augmented.append(SnapshotToTrain(flipped_img, snap.color_followed, flipped_ctrl))
+    return snapshots_augmented
 
-snapshots = augment_data(snapshots)
+snapshots_augmented = augment_data(snapshots)
 
-# Split into train and test sets
-train_snapshots, test_snapshots = train_test_split(snapshots, test_size=0.2, random_state=42)
+# Data distribution analysis
+data_controls = [snap.current_controls for snap in snapshots_augmented]
+class_counts = Counter(data_controls)
+print("Class Counts:", class_counts)
 
-# Custom collate function
+# Split data into training and testing sets
+train_snapshots, test_snapshots = train_test_split(snapshots_augmented, test_size=0.2, random_state=42)
+print(f"Training set size: {len(train_snapshots)}, Test set size: {len(test_snapshots)}")
+
+# Custom collate function for DataLoader
 def my_collate(batch):
-    images = torch.stack([item.image for item in batch])
+    images = np.array([item.image for item in batch])
+    images = torch.tensor(images, dtype=torch.float32).permute(0, 3, 1, 2)
     colors = torch.tensor([item.color_followed for item in batch], dtype=torch.float32)
-    controls = torch.tensor([item.current_controls for item in batch], dtype=torch.long)  # For CrossEntropyLoss
+    controls = torch.tensor([item.current_controls for item in batch], dtype=torch.float32)
     return images, colors, controls
 
-# DataLoader
-batch_size = 32
+# DataLoaders
+batch_size = 16
 train_loader = DataLoader(train_snapshots, batch_size=batch_size, shuffle=True, collate_fn=my_collate)
 test_loader = DataLoader(test_snapshots, batch_size=batch_size, shuffle=False, collate_fn=my_collate)
 
-# Model, optimizer, and scheduler
+# Model, loss, optimizer setup
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = SimpleImageColorNet(num_classes=4).to(device)
 criterion = nn.CrossEntropyLoss()
-optimizer = Adam(model.parameters(), lr=0.001, weight_decay=1e-4)
-scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=5)
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=1e-5)
 
-# Training loop
-best_model_state = None
-best_test_loss = float('inf')
-
-for epoch in range(5):
+# Training and evaluation
+num_epochs = 30
+for epoch in range(num_epochs):
     model.train()
     train_loss = 0.0
     for images, colors, controls in train_loader:
@@ -109,20 +117,14 @@ for epoch in range(5):
         for images, colors, controls in test_loader:
             images, colors, controls = images.to(device), colors.to(device), controls.to(device)
             outputs = model(images, colors)
-            test_loss += criterion(outputs, controls).item()
-            _, predicted = torch.max(outputs, 1)
-            correct += (predicted == controls).sum().item()
+            loss = criterion(outputs, controls)
+            test_loss += loss.item()
+            _, predicted = torch.max(outputs.data, 1)
             total += controls.size(0)
+            correct += (predicted == torch.argmax(controls, dim=1)).sum().item()
     test_loss /= len(test_loader)
     accuracy = 100 * correct / total
+    print(f"Epoch [{epoch+1}/{num_epochs}], Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}, Accuracy: {accuracy:.2f}%")
 
-    if test_loss < best_test_loss:
-        best_test_loss = test_loss
-        best_model_state = model.state_dict()
-
-    scheduler.step(test_loss)
-    print(f"Epoch [{epoch+1}/100]: Train Loss={train_loss:.4f}, Test Loss={test_loss:.4f}, Accuracy={accuracy:.2f}%")
-
-# Save best model
-if best_model_state:
-    torch.save(best_model_state, "model.pth")
+# Save the trained model
+torch.save(model.state_dict(), "model.pth")

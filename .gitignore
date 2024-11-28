@@ -96,3 +96,8 @@ dmypy.json
 *.log
 *.tmp
 *.temp
+
+#ignore big files
+*.zip
+*.npz
+*.pth
