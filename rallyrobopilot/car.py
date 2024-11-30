@@ -184,7 +184,7 @@ class Car(Entity):
 
     def display_particles(self):
         # Particles
-        self.particle_time += time.dt
+        self.particle_time += 0.1
         if self.particle_time >= self.particle_amount:
             self.particle_time = 0
             self.particles = Particles(self, self.particle_pivot.world_position - (0, 1, 0))
@@ -194,44 +194,44 @@ class Car(Entity):
         # Hand Braking
         if held_keys["space"]:
             if self.rotation_speed < 0:
-                self.rotation_speed -= 3 * time.dt
+                self.rotation_speed -= 3 * 0.1
             elif self.rotation_speed > 0:
-                self.rotation_speed += 3 * time.dt
-            self.speed -= 20 * time.dt
+                self.rotation_speed += 3 * 0.1
+            self.speed -= 20 * 0.1
 
     def compute_steering(self):
         # Steering
-        self.rotation_y += self.rotation_speed * 50 * time.dt
+        self.rotation_y += self.rotation_speed * 50 * 0.1
 
         # The car's linear momentum decreases the rotation.
         if self.rotation_speed > 0:
-            self.rotation_speed -= self.speed / 6 * time.dt
+            self.rotation_speed -= self.speed / 6 * 0.1
         elif self.rotation_speed < 0:
-            self.rotation_speed += self.speed / 6 * time.dt
+            self.rotation_speed += self.speed / 6 * 0.1
 
         # Can only turn if |speed| > 0.5
         if self.speed > 0.5 or self.speed < -0.5:
             if held_keys[self.controls[1]] or held_keys["left arrow"]:
-                self.rotation_speed -= self.steering_amount * time.dt
+                self.rotation_speed -= self.steering_amount * 0.1
 
                 # Turning decreases our speed.
                 if self.speed > 1:
-                    self.speed -= self.turning_speed * time.dt
+                    self.speed -= self.turning_speed * 0.1
                 elif self.speed < 0:
-                    self.speed += self.turning_speed / 5 * time.dt
+                    self.speed += self.turning_speed / 5 * 0.1
 
             elif held_keys[self.controls[3]] or held_keys["right arrow"]:
-                self.rotation_speed += self.steering_amount * time.dt
+                self.rotation_speed += self.steering_amount * 0.1
                 if self.speed > 1:
-                    self.speed -= self.turning_speed * time.dt
+                    self.speed -= self.turning_speed * 0.1
                 elif self.speed < 0:
-                    self.speed += self.turning_speed / 5 * time.dt
+                    self.speed += self.turning_speed / 5 * 0.1
             # If no keys pressed, the rotation speed goes down.
             else:
                 if self.rotation_speed > 0:
-                    self.rotation_speed -= 5 * time.dt
+                    self.rotation_speed -= 5 * 0.1
                 elif self.rotation_speed < 0:
-                    self.rotation_speed += 5 * time.dt
+                    self.rotation_speed += 5 * 0.1
         else:
             self.rotation_speed = 0
 
@@ -276,8 +276,8 @@ class Car(Entity):
                 else:
                     self.ground_normal = self.position + (0, 180, 0)
             else:
-                self.y += movementY * 50 * time.dt
-                self.velocity_y -= 50 * time.dt
+                self.y += movementY * 50 * 0.1
+                self.velocity_y -= 50 * 0.1
 
 
     def update(self):
@@ -289,23 +289,23 @@ class Car(Entity):
 
         #   Process inputs & update speed
         if held_keys[self.controls[0]] or held_keys["up arrow"]:
-            self.speed += self.acceleration * time.dt
+            self.speed += self.acceleration * 0.1
             self.driving = True
 
             self.display_particles()
         else:
             self.driving = False
             if self.speed > 1:
-                self.speed -= self.friction * 5 * time.dt
+                self.speed -= self.friction * 5 * 0.1
             elif self.speed < -1:
-                self.speed += self.friction * 5 * time.dt
+                self.speed += self.friction * 5 * 0.1
 
         # Braking
         if held_keys[self.controls[2] or held_keys["down arrow"]]:
             if self.speed > 0:
-                self.speed -= self.braking_strenth * time.dt
+                self.speed -= self.braking_strenth * 0.1
             else:
-                self.speed -= self.acceleration * time.dt
+                self.speed -= self.acceleration * 0.1
             self.braking = True
         else:
             self.braking = False
@@ -333,7 +333,7 @@ class Car(Entity):
             radius = rotation_radius(normalized_speed)
 
             #   Get travelled distance
-            travelled_dist = abs(self.speed * time.dt)
+            travelled_dist = abs(self.speed * 0.1)
             #   Project on circle radius & compute angle variation seen from the center of the circle
             travelled_circle_center_angle = travelled_dist / radius
             #   Compute variation in Y & X
@@ -345,7 +345,7 @@ class Car(Entity):
             self.rotation_y += da * rotation_sign
 
         #   Integrate speed into movement
-        total_dist_to_move = self.speed * time.dt
+        total_dist_to_move = self.speed * 0.1
 
         #   Check collision via recast
 

@@ -22,19 +22,14 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Constants
 IMAGE_SIZE = (227, 227)
 BATCH_SIZE = 64
-NUM_EPOCHS = 500
+DROP_OUT = 0.5
+NUM_EPOCHS = 50
 LEARNING_RATE = 0.0001
-COLOR = [[255, 0, 0], [0, 0, 255], [0, 255, 255], [255, 0, 0], [0, 0, 255]]
+#COLOR = [[255, 0, 0],[0,255,255],[0,0,255]]
+COLOR = [[255, 0, 0], [0, 0, 255], [0, 255, 255], [255, 0, 0], [0, 0, 255],[255,0,0],[0,255,255],[0,0,255],[255, 0, 0],[0,255,255],[0,0,255]]
 
-# Define the best hyperparameters from Optuna
-BEST_PARAMS = {
-    "learning_rate": 2.337351727970422e-05,
-    "batch_size": 64,
-    "optimizer": "Adam",
-    "dropout_rate": 0.11723430720971442,
-    "weight_decay": 3.071674784294563e-05,
-    "scheduler": "ReduceLROnPlateau",
-}
+
+
 
 # Class to store snapshot data
 class SnapshotToTrain:
@@ -69,8 +64,10 @@ for record in glob.glob("*.npz"):
 
             # Determine color followed
             npz_number = int(record.split("_")[1].split(".")[0])
+            
             color_followed = COLOR[npz_number]
-
+            print(f"colors followed is {color_followed}")
+            
             # Process snapshot pairs
             for i in range(len(data) - 1):
                 image, controls = process_snapshot_pair(data[i], data[i + 1])
@@ -100,15 +97,39 @@ def augment_data(snapshots):
 
         # Flipped horizontally
         flipped_image = cv2.flip(image, 1)
-
         flipped_controls = np.array([controls[0], controls[1], controls[3], controls[2]], dtype=np.float32)  # Swap left/right
         augmented_snapshots.append(SnapshotToTrain(flipped_image, color, flipped_controls))
 
-        # Brightened
-        bright_image = cv2.convertScaleAbs(image, alpha=1.2, beta=30)
-        augmented_snapshots.append(SnapshotToTrain(bright_image, color, controls))
+        # adding noise on a image that is 6x227x227
+        noise = np.random.normal(0, 0.1, image.shape)
+        noisy_image = image + noise
+        augmented_snapshots.append(SnapshotToTrain(noisy_image, color, controls))
+
+        # augmenting the color
+        color = np.array(color)
+        color = color + np.random.normal(0, 0.1, color.shape)
+        augmented_snapshots.append(SnapshotToTrain(image, color, controls))
+
+
+        # Rotated 90 degrees
+        rotated_image = cv2.rotate(image, cv2.ROTATE_90_CLOCKWISE)
+        rotated_controls = np.array([controls[1], controls[0], controls[2], controls[3]], dtype=np.float32)  # Rotate left/right
+        augmented_snapshots.append(SnapshotToTrain(rotated_image, color, rotated_controls))
+
+        # Gaussian blur
+        blurred_image = cv2.GaussianBlur(image, (5, 5), 0)
+        augmented_snapshots.append(SnapshotToTrain(blurred_image, color, controls))
+
+        # Contrast adjustment
+        contrast_image = cv2.convertScaleAbs(image, alpha=1.5, beta=0)
+        augmented_snapshots.append(SnapshotToTrain(contrast_image, color, controls))
+
+        translated_image = cv2.warpAffine(image, np.float32([[1, 0, 10], [0, 1, 10]]), (image.shape[1], image.shape[0]))
+        augmented_snapshots.append(SnapshotToTrain(translated_image, color, controls))
+                
 
     return augmented_snapshots
+
 
 
 snapshots_augmented = augment_data(snapshots)
@@ -123,14 +144,19 @@ snapshots_train, snapshots_val = train_test_split(snapshots_augmented, test_size
 train_labels = [np.array(snap.current_controls).argmax() for snap in snapshots_train]
 val_labels = [np.array(snap.current_controls).argmax() for snap in snapshots_val]
 print("Train class distribution:", Counter(train_labels))
-print("Validation class distribution:", Counter(val_labels))
-class_weights = torch.tensor([1.0 / count for count in Counter(train_labels).values()]).to(device)
+
+class_weights = 1.0 / np.array(list(Counter(train_labels).values()))
 
 # Custom dataloader
 def my_collate(batch):
     # Convert images to tensor
     images = np.array([item.image for item in batch])
     images = torch.tensor(images, dtype=torch.float32).permute(0, 3, 1, 2)  # (N, C, H, W)
+    """
+    # Add Gaussian noise
+    noise = torch.randn(images.size()) * 0.0
+    images = images + noise
+    """
     
     # Convert colors to tensor
     colors = np.stack([item.color_followed for item in batch])  # Stack into a single numpy array
@@ -139,24 +165,38 @@ def my_collate(batch):
     # Convert controls to tensor
     controls = np.stack([item.current_controls for item in batch])  # Stack controls
     controls = torch.tensor(controls, dtype=torch.float32)  # Convert to class indices
+
+    
+
+
     return images, colors, controls
 
+# Weighted sampler for imbalanced classes
+class_sample_weights = 1.0 / np.array([26231, 4225, 3858, 3609])  # Adjust based on distribution
+train_sampler = torch.utils.data.WeightedRandomSampler(
+    weights=class_sample_weights, num_samples=len(snapshots_train), replacement=True
+)
 
-# Create dataloaders
-train_loader = DataLoader(snapshots_train,BEST_PARAMS["batch_size"], shuffle=True, collate_fn=my_collate)
-val_loader = DataLoader(snapshots_val, BEST_PARAMS["batch_size"],shuffle=False, collate_fn=my_collate)
+# Create dataloaders for training and validation
+train_loader = DataLoader(snapshots_train, BATCH_SIZE, shuffle=True, collate_fn=my_collate)
+val_loader = DataLoader(snapshots_val, BATCH_SIZE,shuffle=False, collate_fn=my_collate)
 
-# Model
-model = ModifiedAlexNet(BEST_PARAMS["dropout_rate"]).to(device)
+# Model 
+model = ModifiedAlexNet(DROP_OUT).to(device)
 print(f"Total trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
 # Optimizer
-optimizer = torch.optim.Adam(model.parameters(), lr=BEST_PARAMS["learning_rate"], weight_decay=BEST_PARAMS["weight_decay"])
+optimizer = Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=0.0001, amsgrad=True)
 
 # Loss function
 criterion = nn.BCEWithLogitsLoss(weight=class_weights)
 
 # Scheduler
 scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode="min", factor=0.1, patience=10)
+
+# store all data over the epoch
+train_loss_d = []
+val_loss_d = []
+accuracy_d = []
 
 # Training loop
 best_accuracy = 0.0
@@ -173,6 +213,7 @@ for epoch in range(NUM_EPOCHS):
         optimizer.step()
         train_loss += loss.item()
     train_loss /= len(train_loader)
+    train_loss_d.append(train_loss) 
 
     # Validation
     model.eval()
@@ -184,7 +225,7 @@ for epoch in range(NUM_EPOCHS):
             outputs = model(images, colors)
             val_loss += criterion(outputs, controls).item()
 
-            # a prediction is correct only if all controls are correct
+            #set threshold to check
             predicted = (torch.sigmoid(outputs) > 0.5).float()
 
             correct += (predicted == controls).all(dim=1).sum().item() 
@@ -193,6 +234,8 @@ for epoch in range(NUM_EPOCHS):
 
     val_loss /= len(val_loader)
     accuracy = 100 * correct / total
+    accuracy_d.append(accuracy)
+    val_loss_d.append(val_loss)
 
     scheduler.step(val_loss)
 
@@ -202,7 +245,20 @@ for epoch in range(NUM_EPOCHS):
         best_accuracy = accuracy
         torch.save(model.state_dict(), "best_final_model.pth")
 
-    print(f"Epoch {epoch+1}/{NUM_EPOCHS}, Train Loss: {train_loss:.4f}, Accuracy: {accuracy:.2f}%")
+    print(f"Epoch {epoch+1}/{NUM_EPOCHS}, Train Loss: {train_loss:.4f},Val loss: {val_loss:.4f} Accuracy: {accuracy:.2f}%")
+
+   
+
+
+# save plots with information about the model
+plt.plot(train_loss_d, label="Train Loss")
+plt.plot(val_loss_d, label="Validation Loss")
+#plt.plot(accuracy_d, label="Validation Accuracy")
+plt.xlabel("Epoch")
+plt.ylabel("Loss")
+plt.legend()
+plt.savefig("metrics10.png")
+plt.close()
 
 print(f"Best Validation Accuracy: {best_accuracy:.2f}%")
 

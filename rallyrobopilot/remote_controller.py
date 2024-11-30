@@ -68,36 +68,36 @@ class RemoteController(Entity):
         if self.car is None or self.connected_client is None:
             return
 
-        if time.time() - self.last_sensing >= self.sensing_period:
-            snapshot = SensingSnapshot()
-            snapshot.current_controls = (held_keys['w'] or held_keys["up arrow"],
-                                         held_keys['s'] or held_keys["down arrow"],
-                                         held_keys['a'] or held_keys["left arrow"],
-                                         held_keys['d'] or held_keys["right arrow"])
-            snapshot.car_position = self.car.world_position
-            snapshot.car_speed = self.car.speed
-            snapshot.car_angle = self.car.rotation_y
-            snapshot.raycast_distances = self.car.multiray_sensor.collect_sensor_values()
+        
+        snapshot = SensingSnapshot()
+        snapshot.current_controls = (held_keys['w'] or held_keys["up arrow"],
+                                        held_keys['s'] or held_keys["down arrow"],
+                                        held_keys['a'] or held_keys["left arrow"],
+                                        held_keys['d'] or held_keys["right arrow"])
+        snapshot.car_position = self.car.world_position
+        snapshot.car_speed = self.car.speed
+        snapshot.car_angle = self.car.rotation_y
+        snapshot.raycast_distances = self.car.multiray_sensor.collect_sensor_values()
 
-            #   Collect last rendered image
-            tex = base.win.getDisplayRegion(0).getScreenshot()
-            arr = tex.getRamImageAs("RGB")
-            data = np.frombuffer(arr, np.uint8)
-            image = data.reshape(tex.getYSize(), tex.getXSize(), 3)
-            image = image[::-1, :, :]#   Image arrives with inverted Y axis
+        #   Collect last rendered image
+        tex = base.win.getDisplayRegion(0).getScreenshot()
+        arr = tex.getRamImageAs("RGB")
+        data = np.frombuffer(arr, np.uint8)
+        image = data.reshape(tex.getYSize(), tex.getXSize(), 3)
+        image = image[::-1, :, :]#   Image arrives with inverted Y axis
 
-            snapshot.image = image
+        snapshot.image = image
 
-            msg_mngr = SensingSnapshotManager()
-            data = msg_mngr.pack(snapshot)
+        msg_mngr = SensingSnapshotManager()
+        data = msg_mngr.pack(snapshot)
 
-            self.connected_client.settimeout(0.01)
-            try:
-                self.connected_client.sendall(data)
-            except socket.error as e:
-                print(f"Socket error: {e}")
+        self.connected_client.settimeout(0.01)
+        try:
+            self.connected_client.sendall(data)
+        except socket.error as e:
+            print(f"Socket error: {e}")
 
-            self.last_sensing = time.time()
+        self.last_sensing = time.time()
 
     def get_sensing_data(self):
         current_controls = (held_keys['w'] or held_keys["up arrow"],

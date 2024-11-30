@@ -76,12 +76,8 @@ class SimpleNNMsgProcessor:
         
         print(output_feature_labels[predicted])
 
-        # Treat nothing as no action.
-        if predicted == 4:
-            return
-            # return [(output_feature_labels[0], True)]
-        else:
-            return [(output_feature_labels[predicted], True)]
+        #must threath return [(output_feature_labels[predicted], True)] like that
+        return [(output_feature_labels[predicted], True)]
         
 
     def process_message(self, message, data_collector):

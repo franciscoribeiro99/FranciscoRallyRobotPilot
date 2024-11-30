@@ -22,7 +22,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Constants
 IMAGE_SIZE = (227, 227)
 NUM_EPOCHS = 500
-COLOR = [[255, 0, 0], [0, 0, 255], [0, 255, 255], [255, 0, 0], [0, 0, 255]]
+COLOR = [[255, 0, 0], [0, 0, 255], [0, 255, 255], [255, 0, 0], [0, 0, 255],[255,0,0],[0,255,255],[0,0,255]]
+
 
 # Class to store snapshot data
 class SnapshotToTrain:

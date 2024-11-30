@@ -19,11 +19,11 @@ class Particles(Entity):
 
 
     def update(self):
-        self.position += self.direction * 5 * time.dt
+        self.position += self.direction * 5 * 0.1
         if hasattr(self.car, "graphics"):
             if self.car.graphics != "fancy":
-                self.scale_x += 0.1 * time.dt
-                self.scale_y += 0.1 * time.dt
+                self.scale_x += 0.1 * 0.1
+                self.scale_y += 0.1 * 0.1
 
     def destroy(self, delay = 1):
         self.fade_out(duration = 0.2, delay = 0.7, curve = curve.linear)
@@ -42,7 +42,7 @@ class TrailRenderer(Entity):
 
     def update(self):
         if self.trailing:
-            self._t += time.dt
+            self._t += 0.1
             if self._t >= self.update_step:
                 self._t = 0
                 self.renderer.model.vertices.pop(0)
@@ -84,7 +84,7 @@ class TrailRenderer(Entity):
 #         self.direction = Vec3(random.random(), random.random(), random.random()) * self.amount_of_smoke
 
 #     def update(self):
-#         self.position += self.direction * 120 * time.dt
+#         self.position += self.direction * 120 * 0.1
 
 #         if self.amount_of_smoke >= 0.1:
 #             self.amount_of_smoke = 0.1

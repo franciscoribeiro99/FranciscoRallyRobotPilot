@@ -1,130 +1,105 @@
-import os
-import glob
-import lzma
-import pickle
+import sys
+import torch
+import torch.nn as nn
+from PyQt6 import QtWidgets
 import cv2
 import numpy as np
-import torch
 from torchvision import transforms
-import torch.nn.functional as F
-from torch.utils.data import Dataset, DataLoader
-from torch import nn
-from torch.optim import Adam
+from data_collector import DataCollectionUI  
+from models2 import ModifiedAlexNet 
 import matplotlib.pyplot as plt
-from collections import Counter
-from sklearn.model_selection import train_test_split
+from torch.nn.functional import sigmoid
+import time
 
-# Color mappings
-COLOR = [[255, 0, 0], [0, 0, 255], [0, 255, 255], [255, 0, 0], [0, 0, 255]]
 
-# Free GPU memory
-torch.cuda.empty_cache()
-
-# Device
+# Initialize device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+# Path to the pre-trained model
+model_path = "model.pth"
+color_to_follow=[255,0,0]
 
-# Constants
-IMAGE_SIZE = (227, 227)  # Resize images
-BATCH_SIZE = 64
-NUM_EPOCHS = 500
-LEARNING_RATE = 0.001
+IMAGE_SIZE = (227, 227)
+THRESHOLD = 0.5 
 
-# Data container class
-class SnapshotToTrain:
-    def __init__(self, image, color_followed, current_controls):
-        self.image = image
-        self.color_followed = color_followed
-        self.current_controls = current_controls
-
-# Data preprocessing
-snapshots = []
-for record in glob.glob("*.npz"):
-    try:
-        with lzma.open(record, "rb") as file:
-            data = pickle.load(file)
-            print(f"Read {len(data)} snapshots from {record}")
-            
-            npz_number = int(record.split("_")[1].split(".")[0])
-            color_followed = COLOR[npz_number]
-
-            for i in range(len(data) - 1):
-                img1, img2 = data[i].image, data[i + 1].image
-                controls = data[i + 1].current_controls
-
-                if img1 is not None and img2 is not None:
-                    img1 = cv2.resize(cv2.cvtColor(img1, cv2.COLOR_BGR2RGB), IMAGE_SIZE) / 255.0
-                    img2 = cv2.resize(cv2.cvtColor(img2, cv2.COLOR_BGR2RGB), IMAGE_SIZE) / 255.0
-                    concatenated_img = np.concatenate((img1, img2), axis=2)
-                    snapshots.append(SnapshotToTrain(concatenated_img, color_followed, controls))
-    except Exception as e:
-        print(f"Error processing {record}: {e}")
-
-# Augment data
-def augment_data(snapshots):
-    augmented = []
-    for snap in snapshots:
-        augmented.append(snap)
-        flipped_img = snap.image[:, ::-1, :]
-        flipped_ctrl = (snap.current_controls[0], snap.current_controls[1], snap.current_controls[3], snap.current_controls[2])
-        augmented.append(SnapshotToTrain(flipped_img, snap.color_followed, flipped_ctrl))
-    return augmented
-
-snapshots = augment_data(snapshots)
-
-# Split data
-train_snapshots, test_snapshots = train_test_split(snapshots, test_size=0.2, random_state=42)
-
-# DataLoader
-def my_collate(batch):
-    images = np.array([item.image for item in batch]) / 255.0
-    images = torch.tensor(images, dtype=torch.float32).permute(0, 3, 1, 2)
-    colors = torch.tensor([item.color_followed for item in batch], dtype=torch.float32)
-    controls = torch.tensor([item.current_controls for item in batch], dtype=torch.float32)
-    return images, colors, controls
-
-train_loader = DataLoader(train_snapshots, batch_size=BATCH_SIZE, shuffle=True, collate_fn=my_collate)
-test_loader = DataLoader(test_snapshots, batch_size=BATCH_SIZE, shuffle=False, collate_fn=my_collate)
-
-model = SimpleImageColorNet().to(device)
-
-# Loss and optimizer
-class_counts = Counter([tuple(snap.current_controls) for snap in train_snapshots])
-weights = torch.tensor([1 / max(class_counts.values()) * class_counts[tuple(c)] for c in range(4)], dtype=torch.float32).to(device)
-criterion = nn.BCEWithLogitsLoss(pos_weight=weights)
-optimizer = Adam(model.parameters(), lr=LEARNING_RATE)
-
-# Training loop
-train_losses, test_losses, accuracies = [], [], []
-for epoch in range(NUM_EPOCHS):
-    model.train()
-    train_loss = 0
-    for images, colors, controls in train_loader:
-        images, colors, controls = images.to(device), colors.to(device), controls.to(device)
-        optimizer.zero_grad()
-        outputs = model(images, colors)
-        loss = criterion(outputs, controls)
-        loss.backward()
-        optimizer.step()
-        train_loss += loss.item()
-    train_loss /= len(train_loader)
-    train_losses.append(train_loss)
-
-    # Evaluate
+# Load model
+model = ModifiedAlexNet()
+try:
+    state_dict = torch.load(model_path, map_location=device)
+    model.load_state_dict(state_dict, strict=False)
+    model.to(device)
     model.eval()
-    test_loss, correct, total = 0, 0, 0
-    with torch.no_grad():
-        for images, colors, controls in test_loader:
-            images, colors, controls = images.to(device), colors.to(device), controls.to(device)
-            outputs = model(images, colors)
-            test_loss += criterion(outputs, controls).item()
-            predictions = (torch.sigmoid(outputs) > 0.5).float()
-            correct += (predictions == controls).all(dim=1).sum().item()
-            total += controls.size(0)
-    test_loss /= len(test_loader)
-    test_losses.append(test_loss)
-    accuracy = correct / total
-    accuracies.append(accuracy)
+    print("Model loaded successfully.")
+except FileNotFoundError:
+    print(f"Error: Model file '{model_path}' not found.")
+    sys.exit(1)
+except Exception as e:
+    print(f"Error loading model: {e}")
+    sys.exit(1)
+# Control action labels
+output_feature_labels = ['forward', 'back', 'right', 'left']
+# Preprocessing pipeline
+preprocess = transforms.Compose([
+    transforms.ToTensor(),  # Convert image to tensor
+])
+def preprocess_input(image, color):
+    """Resize, normalize, and prepare the image and color input."""
+    if image.shape[-1] != 6:
+        raise ValueError(f"Expected image with 6 channels, got {image.shape[-1]}.")
+    image_tensor = torch.tensor(image.transpose(2, 0, 1), dtype=torch.float32).div(255.0)
+    color_tensor = torch.tensor(color, dtype=torch.float32).unsqueeze(0)
+    return image_tensor.unsqueeze(0).to(device), color_tensor.to(device)
+class CNNMsgProcessor:
+    def __init__(self):
+        self.model = model
+        self.last_message = None
+    def cnn_infer(self, message):
+        if message.image is None:
+            print("Error: Missing image in the message.")
+            return []
+        try:
+            resized_image = cv2.resize(message.image, IMAGE_SIZE)
+            resized_last = cv2.resize(self.last_message.image if self.last_message else resized_image, IMAGE_SIZE)
+            concatenated = np.concatenate((resized_image, resized_last), axis=2)
+            concatenated_tensor, color_tensor = preprocess_input(concatenated, color_to_follow)
 
-    print(f"Epoch {epoch+1}/{NUM_EPOCHS}, Train Loss: {train_loss:.4f}, Test Loss: {test_loss:.4f}, Accuracy: {accuracy:.4f}")
+            thresholds = [0.6, 0.6, 0.5, 0.4]  # Example thresholds for [Forward, Backward, Left, Right]
+            # Perform inference
+            with torch.no_grad():
+                outputs = self.model(concatenated_tensor, color_tensor)  # Raw logits
+                predicted = (torch.sigmoid(outputs) > torch.tensor(thresholds, device='cuda')).float()
 
-torch.save(model.state_dict(), "improved_model.pth")
+            # Debugging output
+            print(f"Outputs (logits): {outputs}")
+            print(f"Predicted (processed): {predicted}")
+
+                # Return all active actions
+            active_actions = [
+                (output_feature_labels[i], True) for i, p in enumerate(predicted[0]) if p > 0
+            ]
+
+            return active_actions
+        except Exception as e:
+            print(f"Error during inference: {e}")
+            return []
+
+    def handle_message(self, message, data_collector):
+        try:
+            print("Handling message...")
+            # Infer commands from the CNN model
+            commands = self.cnn_infer(message)
+            # Update last_message after successful processing
+            self.last_message = message if message.image is not None else self.last_message
+            # Send commands to the data collector
+            for command, start in commands:
+                data_collector.onCarControlled(command, start)
+        except Exception as e:
+            print(f"Error while handling message: {e}")
+if __name__ == "__main__":
+    def except_hook(cls, exception, traceback):
+        sys.__excepthook__(cls, exception, traceback)
+    sys.excepthook = except_hook
+    app = QtWidgets.QApplication(sys.argv)
+    cnn_brain = CNNMsgProcessor()
+    data_window = DataCollectionUI(cnn_brain.handle_message)
+    data_window.show()
+    app.exec()
