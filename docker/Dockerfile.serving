@@ -19,6 +19,7 @@ RUN python3 -m venv $VIRTUAL_ENV
 ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 RUN pip install --upgrade pip && pip install --no-cache-dir -r requirements.serving.txt
 RUN pip install python3_xlib
+RUN pip install -e .
 
 # Setup as entrypoint to allow
 # for inline argument

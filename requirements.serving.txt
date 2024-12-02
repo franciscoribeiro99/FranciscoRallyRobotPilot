@@ -143,7 +143,6 @@ python-json-logger==2.0.7
 pytz==2024.2
 PyYAML==6.0.2
 pyzmq==26.2.0
--e git+https://github.com/franciscoribeiro99/FranciscoRallyRobotPilot@9e7d05b47feb32e7137b3a8b3cd50e8332b790d1#egg=rallyrobopilot
 referencing==0.35.1
 requests==2.32.3
 rfc3339-validator==0.1.4
