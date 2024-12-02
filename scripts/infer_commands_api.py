@@ -1,7 +1,6 @@
 import sys
 import base64
 
-from PyQt6 import QtWidgets
 from flask import Flask, jsonify, request
 import json
 
