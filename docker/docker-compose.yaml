@@ -1,0 +1,5 @@
+services:
+  serving:
+    build:
+      context: .
+      dockerfile: Dockerfile.serving
