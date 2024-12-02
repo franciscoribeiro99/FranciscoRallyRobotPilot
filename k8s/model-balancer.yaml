@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: model-balancer
+  namespace: isc3
+spec:
+  selector:
+    app: model
+  type: NodePort
+  ports:
+    - name: api
+      protocol: TCP
+      port: 6000
+      targetPort: 6000
+      nodePort: 30309

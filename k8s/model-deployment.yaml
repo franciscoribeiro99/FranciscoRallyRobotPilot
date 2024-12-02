@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: model-deployment
+  namespace: isc3
+  labels:
+    app: model
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: model
+  template:
+    metadata:
+      labels:
+        app: model
+    spec:
+      nodeSelector:
+        group: groupe1
+      containers:
+        - name: model
+          image: dij0s/model-serving:latest
+          ports:
+            - containerPort: 6000
+          resources:
+            requests:
+              cpu: 500m
+            limits:
+              cpu: 750m
