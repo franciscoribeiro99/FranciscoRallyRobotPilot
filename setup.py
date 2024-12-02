@@ -12,7 +12,7 @@ setup(
     author="Louis Lettry, Cédric Travelletti",
     author_email="",
     description="",
-    long_description=open('README.md').read(),
+    long_description="",
     long_description_content_type="text/markdown",
     url="",  # Replace with your repo URL if available
     packages=find_packages(),  # Automatically find and include packages
