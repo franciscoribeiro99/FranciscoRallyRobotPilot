@@ -15,15 +15,8 @@ spec:
       labels:
         app: model
     spec:
-      nodeSelector:
-        group: groupe1
       containers:
         - name: model
           image: dij0s/model-serving:latest
           ports:
             - containerPort: 6000
-          resources:
-            requests:
-              cpu: 500m
-            limits:
-              cpu: 750m
