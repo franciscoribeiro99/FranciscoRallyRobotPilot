@@ -1,6 +1,19 @@
 FROM debian:stable-slim
 
+RUN apt-get -y update
+RUN apt install libgl1-mesa-glx -y
+RUN apt-get install 'ffmpeg'\
+    'libsm6'\
+    'libxext6'  -y
+
 EXPOSE 5000
+
+RUN apt-get update && \
+    apt-get install -y xvfb x11-utils libgl1-mesa-dri && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update -y \
+  && apt-get install --no-install-recommends -y mesa-utils
 
 WORKDIR /app
 
