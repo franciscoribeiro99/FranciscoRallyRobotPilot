@@ -4,7 +4,6 @@ import base64
 from flask import Flask, jsonify, request
 import json
 
-from data_collector import DataCollectionUI
 from rallyrobopilot.sensing_message import SensingSnapshot
 from cnn_model import CNNMsgProcessor
 
