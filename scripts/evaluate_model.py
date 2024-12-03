@@ -74,7 +74,10 @@ class Evaluation():
                 ascii_encoded_message = json.dumps(b64_message.decode('ascii'))
 
                 request = requests.post('http://127.0.0.1:5000/api/infer', json={'message': ascii_encoded_message})
-                controls = json.loads(request.content)
+                controls = json.loads(request.content)['controls']
+                controls = json.loads(controls)
+                controls = [(c[0], c[1]) for c in controls]
+                print(f"[LOG] Received controls from API: {controls}")
 
                 for command, start in controls:
                     data_collector.onCarControlled(command, start)
