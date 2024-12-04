@@ -22,17 +22,17 @@
 
         {
             "model": "assets/VisualTrack/IntersectionPath1.obj",
-            "texture": "assets/Indicators/Indicators_cyan.png"
-        },
-
-        {
-            "model": "assets/VisualTrack/IntersectionPath2.obj",
             "texture": "assets/Indicators/Indicators_red.png"
         },
 
         {
+            "model": "assets/VisualTrack/IntersectionPath2.obj",
+            "texture": "assets/Indicators/Indicators_yellow.png"
+        },
+
+        {
             "model": "assets/VisualTrack/IntersectionPath3.obj",
-            "texture": "assets/Indicators/Indicators_blue.png"
+            "texture": "assets/Indicators/Indicators_violet.png"
         }
     ], 
     "obstacles":

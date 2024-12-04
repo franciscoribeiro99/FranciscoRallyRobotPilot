@@ -6,11 +6,11 @@ class ModifiedAlexNet(nn.Module):
     def __init__(self, dropout_rate=0.5):
         super(ModifiedAlexNet, self).__init__()
 
-        firstLayerSize = 64
-        secondLayerSize = 128
-        thirdLayerSize = 164
-        fourthLayerSize = 128
-        fifthLayerSize = 64
+        firstLayerSize = 32
+        secondLayerSize = 64
+        thirdLayerSize = 128
+        fourthLayerSize = 256
+        fifthLayerSize = 128
 
         # Feature extractor with skip connections
         self.feature_extractor = nn.Sequential(
@@ -45,6 +45,10 @@ class ModifiedAlexNet(nn.Module):
             nn.Linear(3, 128),
             nn.ReLU(),
             nn.Dropout(dropout_rate),
+            nn.Linear(128, 256),
+            nn.ReLU(),
+            nn.Dropout(dropout_rate),
+            nn.Linear(256, 128),
         )
 
         # Combined classifier
