@@ -155,7 +155,7 @@ class DataCollectionUI(QtWidgets.QMainWindow):
 if __name__ == "__main__":
 
     import sys
-    from nn_autopilotRibeiro2 import CNNMsgProcessor as ModelMessageProcessor
+    from cnn_model import CNNMsgProcessor as ModelMessageProcessor
 
     def except_hook(cls, exception, traceback):
         sys.__excepthook__(cls, exception, traceback)

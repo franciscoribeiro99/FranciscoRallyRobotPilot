@@ -71,19 +71,35 @@ class CNNMsgProcessor:
         try:
             resized_image = cv2.resize(message.image, IMAGE_SIZE)
             resized_last = cv2.resize(self.last_message.image if self.last_message else resized_image, IMAGE_SIZE)
+        
+        
             concatenated = np.concatenate((resized_image, resized_last), axis=2)
+            thresholds = [0.5, 0.5, 0.5, 0.5] 
+
             concatenated_tensor, color_tensor = preprocess_input(concatenated, color_to_follow)
 
+            # Perform inference
             with torch.no_grad():
-                output = self.model(concatenated_tensor, color_tensor)
-                probabilities = F.softmax(output, dim=1)
-                predicted_action = torch.argmax(probabilities, dim=1).item()
+                outputs = self.model(concatenated_tensor, color_tensor)  # Raw logits
+                sigmoid_outputs = torch.sigmoid(outputs)  # Apply sigmoid to outputs
+                #aply threshold 0 ,1 
+                predicted = (sigmoid_outputs > torch.tensor(thresholds).to(device)).float()
+                predicted = predicted.detach().cpu().numpy()
+                predicted.tolist()
+                
 
-            # print the probabilities
-            print(probabilities)
-            print(f"Predicted action: {output_feature_labels[predicted_action]}")
+            
+            print(f"Resized image shape: {resized_image.shape}")
+            print(f"Concatenated tensor shape: {concatenated_tensor.shape}")
+            print(f"Color tensor shape: {color_tensor.shape}")
+            print(f"Sigmoid outputs: {sigmoid_outputs}")
 
-            return [(output_feature_labels[predicted_action], True)]
+            # Return all active actions and put False the one that are not 
+            active_actions = [
+                (output_feature_labels[i], int(predicted[0][i])) for i in range(len(output_feature_labels))
+            ]
+
+            return active_actions
 
         except Exception as e:
                 print(f"Inference error: {e}")
